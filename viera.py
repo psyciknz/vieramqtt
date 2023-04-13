@@ -17,36 +17,13 @@ ch.setFormatter(formatter)
 _LOGGER.addHandler(ch)
 
 
-def connecttv(self, host=None,app_id=None,encryption=None):
-    if app_id is None:
-        print("Need to get PIN code and authorise")
-        # Get pinn
-        #rc.request_pin_code()
-        # Interactively ask the user for the pin code
-        #print("Asking for code")
-        #pin = input("Enter code")
-        # Authorize the pin code with the TV
-        #print("Authorising")
-        #rc.authorize_pin_code(pincode=pin)
-        # Display credentials (application ID and encryption key)
-        #print("sending result")
-        #print(rc.app_id)
-        #print( rc.enc_key)
-    else:
-        params = {}
-        params["app_id"]= os.environ.get("APP_ID")
-        params["encryption_key"]= os.environ.get("ENCRYPTION_KEY")
-
-        rc = panasonic_viera.RemoteControl(host,**params)
-
-    return rc
-#def connect(self, host=None,app_id=None,encryption=None):
-
 class VieraMQTTHandler():
 
-    def __init__(self,  mqtt):
+    def __init__(self,  mqtt, tv):
         self.basetopic = mqtt["basetopic"]
-        self.client = self.connectmqtt((mqtt)
+        self.client = self.connectmqtt(mqtt)
+        self.tv = tv
+        self.mqtt = mqtt
     #def __init__(self,  mqtt):
 
     def connectmqtt(mqtt):
@@ -72,11 +49,15 @@ class VieraMQTTHandler():
             client.subscribe(basetopic +"/+/picture")
             client.subscribe(basetopic +"/+/alerts")
 
+            connecttv(tv)
+
             #self.client.subscribe("CameraEventsPy/alerts")
             
         else:
             _LOGGER.info("Camera : {0}: Bad mqtt connection Returned code={1}".format("self.Name",rc) )
             self.client.connected_flag=False
+        #if rc==0
+    #def mqtt_on_connect(client, userdata, flags, rc):
 
     def mqtt_on_disconnect(self, client, userdata, rc):
         logging.info("disconnecting reason  "  +str(rc))
@@ -99,19 +80,63 @@ class VieraMQTTHandler():
                 self.client.publish(self.basetopic +"/" + device.Name + "/alerts/state",msg.payload,qos=0,retain=True)
     #def mqtt_on_message(self,client, userdata, msg):
 
+    def connecttv(self, tv):
+        if 'appid' not in tv:
+            print("Need to get PIN code and authorise")
+            # Get pinn
+            self.rc = panasonic_viera.RemoteControl(host)
+            rc.request_pin_code()
+            client.subscribe(self.basetopic + "/ping")
+            client.message_callback_add(mqtt["basetopic"] +"/pin",mqtt_on_pin_message)
+            client.publish(self.basetopic + "/status","Post pin to " + self.basetopic + "/pin")
+            # Interactively ask the user for the pin code
+            #print("Asking for code")
+            #pin = input("Enter code")
+            # Authorize the pin code with the TV
+            #print("Authorising")
+            #rc.authorize_pin_code(pincode=pin)
+            # Display credentials (application ID and encryption key)
+            #print("sending result")
+            #print(rc.app_id)
+            #print( rc.enc_key)
+        else:
+            params = {}
+            params["app_id"]= tv['appid']
+            params["encryption_key"]= tv['enckey']
+
+            self.rc = panasonic_viera.RemoteControl(host,**params)
+
+        return rc
+    #def connect(self, host=None,app_id=None,encryption=None):
+
+    def mqtt_on_pin_message(self,client, userdata, msg):
+        if msg.payload is not None:
+            print(rc.app_id)
+            print( rc.enc_key)
+            client.publish(self.basetopic + "/status","Store TVAPPID env variable with value: '" + rc.app_id + "' and TVENCRYPTIONLEY with value: '" + rc.enc_key + "'")
+            self.rc.authorize_pin_code(pincode=msg.payload)
+    #def mqtt_on_pin_message(self,client, userdata, msg):
+
+#class VieraMQTTHandler():
+
 if __name__ == '__main__':
     _LOGGER.info("Loading config")
     mqtt = {}
-    mqtt["IP"] = cp.get("MQTT Broker","IP")
-    mqtt["port"] = cp.get("MQTT Broker","port")
-    mqtt["basetopic"] = cp.get("MQTT Broker","BaseTopic")
-    mqtt["user"] = cp.get("MQTT Broker","user",fallback=None)
-    mqtt["password"] = cp.get("MQTT Broker","password",fallback=None)
-    mqtt["basetopic"] = "vieramqtt"
+    mqtt["host"] = os.environ.get['MQTTHOST']
+    mqtt["port"] = os.environ.get['MQTTPORT']
+    mqtt["basetopic"] = os.environ.get['MQTTBASETOPIC']
+    mqtt["user"] = os.environ.get['MQTTUSER']
+    mqtt["password"] = os.environ.get['MQTTPASSWORD']
+    tv = {}
+    tv["host"] = os.environ.get["TVHOST"]
+    tv['appid'] = os.environ.get["TVAPPID"]
+    tv["enckey"] = os.environ.get["TVENCRYPTIONLEY"]
 
-    viera = VieraMQTTHandler(mqtt)
 
-# Make the TV display a pairing pin code
-# We can now start communicating with our TV
-# Send EPG key
-rc.send_key(panasonic_viera.Keys.home)
+    viera = VieraMQTTHandler(mqtt,tv)
+
+    # Make the TV display a pairing pin code
+    # We can now start communicating with our TV
+    # Send EPG key
+    #rc.send_key(panasonic_viera.Keys.home)
+#if __name__ == '__main__':
