@@ -1,7 +1,9 @@
+import logging
+from dotenv import load_dotenv
+import os
 import panasonic_viera            # pip install panasonic_viera, aiohttp
 import paho.mqtt.client as paho   # pip install paho-mqtt
-
-from dotenv import load_dotenv
+import socket 
 
 load_dotenv()
 _LOGGER = logging.getLogger(__name__)
@@ -26,13 +28,14 @@ class VieraMQTTHandler():
         self.mqtt = mqtt
     #def __init__(self,  mqtt):
 
-    def connectmqtt(mqtt):
+    def connectmqtt(self,mqtt):
+        
         client = paho.Client("vieramqtt-" + socket.gethostname(), clean_session=True)
         if not mqtt["user"] is None and not mqtt["user"] == '':
             client.username_pw_set(mqtt["user"], mqtt["password"])
-        client.on_connect = mqtt_on_connect
-        client.on_disconnect = mqtt_on_disconnect
-        client.message_callback_add(mqtt["basetopic"] +"/+/alerts",mqtt_on_message)
+        client.on_connect = self.mqtt_on_connect
+        client.on_disconnect = self.mqtt_on_disconnect
+        client.message_callback_add(mqtt["basetopic"] +"/+/alerts",self.mqtt_on_message)
         
         client.will_set(self.basetopic +"/$online",False,qos=0,retain=True)
         return client
@@ -122,15 +125,18 @@ class VieraMQTTHandler():
 if __name__ == '__main__':
     _LOGGER.info("Loading config")
     mqtt = {}
-    mqtt["host"] = os.environ.get['MQTTHOST']
-    mqtt["port"] = os.environ.get['MQTTPORT']
-    mqtt["basetopic"] = os.environ.get['MQTTBASETOPIC']
-    mqtt["user"] = os.environ.get['MQTTUSER']
-    mqtt["password"] = os.environ.get['MQTTPASSWORD']
+    mqtt["host"] = os.environ.get('MQTTHOST')
+    mqtt["port"] = os.environ.get('MQTTPORT')
+    if 'MQTTBASETOPIC' in os.environ:
+        mqtt["basetopic"] = os.environ.get('MQTTBASETOPIC')
+    else:
+        mqtt["basetopic"] = "viera"
+    mqtt["user"] = os.environ.get('MQTTUSER')
+    mqtt["password"] = os.environ.get('MQTTPASSWORD')
     tv = {}
-    tv["host"] = os.environ.get["TVHOST"]
-    tv['appid'] = os.environ.get["TVAPPID"]
-    tv["enckey"] = os.environ.get["TVENCRYPTIONLEY"]
+    tv["host"] = os.environ.get("TVHOST")
+    tv['appid'] = os.environ.get("TVAPPID")
+    tv["enckey"] = os.environ.get("TVENCRYPTIONLEY")
 
 
     viera = VieraMQTTHandler(mqtt,tv)

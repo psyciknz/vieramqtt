@@ -1,0 +1,3 @@
+panasonic_viera
+aiohttp
+paho-mqtt
