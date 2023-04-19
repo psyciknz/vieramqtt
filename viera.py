@@ -105,20 +105,11 @@ class VieraMQTTHandler():
             print("Need to get PIN code and authorise")
             # Get pinn
             self.rc = panasonic_viera.RemoteControl(tv['host'])
+            _LOGGER.info("ConnectTV: Seding request to auth tv")
             self.rc.request_pin_code()
-            client.subscribe(self.basetopic + "/ping")
+            client.subscribe(self.basetopic + "/pin")
             client.message_callback_add(self.basetopic +"/pin",mqtt_on_pin_message)
             client.publish(self.basetopic + "/status","Post pin to " + self.basetopic + "/pin")
-            # Interactively ask the user for the pin code
-            #print("Asking for code")
-            #pin = input("Enter code")
-            # Authorize the pin code with the TV
-            #print("Authorising")
-            #rc.authorize_pin_code(pincode=pin)
-            # Display credentials (application ID and encryption key)
-            #print("sending result")
-            #print(rc.app_id)
-            #print( rc.enc_key)
         else:
             params = {}
             params["app_id"]= tv['appid']
@@ -126,6 +117,10 @@ class VieraMQTTHandler():
 
             _LOGGER.info("Connecting to tv")
             self.rc = panasonic_viera.RemoteControl(host=tv['host'],app_id=tv['appid'],encryption_key=tv['enckey'])
+            ret = self.rc.get_device_info()
+            _LOGGER.info("MQTT Status: {}".format(str(ret)))
+            self.client.publish(self.basetopic + "/status",str(ret))
+
         
 
     #def connect(self, host=None,app_id=None,encryption=None):
@@ -134,6 +129,7 @@ class VieraMQTTHandler():
         if msg.payload is not None:
             print(rc.app_id)
             print( rc.enc_key)
+            _LOGGER.info("MQTT PIN Message: Received PIN, store in TVAPPID variable  with value: '" + rc.app_id + "' and TVENCRYPTIONLEY with value: '" + rc.enc_key + "'")
             client.publish(self.basetopic + "/status","Store TVAPPID env variable with value: '" + rc.app_id + "' and TVENCRYPTIONLEY with value: '" + rc.enc_key + "'")
             self.rc.authorize_pin_code(pincode=msg.payload)
     #def mqtt_on_pin_message(self,client, userdata, msg):
@@ -167,6 +163,7 @@ if __name__ == '__main__':
         try:
             viera.mqttloop()
         except:
+            _LOGGER.debug("main Loop error")
             pass
     # Make the TV display a pairing pin code
     # We can now start communicating with our TV
