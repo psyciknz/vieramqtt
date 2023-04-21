@@ -50,7 +50,8 @@ class VieraMQTTHandler():
         if self.client is not None:
             self.client.loop_start()
 
-    def mqttloop(self):
+    def mqttloop(self,tv):
+        self.checktvstatus(tv)
         self.client.loop_forever()
 
     def mqtt_on_connect(self,client, userdata, flags, rc):
@@ -120,11 +121,27 @@ class VieraMQTTHandler():
             ret = self.rc.get_device_info()
             _LOGGER.info("MQTT Status: {}".format(str(ret)))
             self.client.publish(self.basetopic + "/status",str(ret))
-
-        
-
     #def connect(self, host=None,app_id=None,encryption=None):
 
+    def checktvstatus(self,tv):
+        _LOGGER.info("MQTT Status: Calling TV status
+        if self.rc is not None:
+          ret = self.rc.get_device_info()
+          _LOGGER.info("MQTT Status: {}".format(str(ret)))
+          self.client.publish(self.basetopic + "/status",str(ret))
+          
+          #Checking if TV is on by getting mute status.
+          try:
+            ret = self.rtc.get_mute()
+            self.client.publish(self.basetopic + "/status/power","on")
+             _LOGGER.info("MQTT Status: Mute state {}".format(str(ret)))
+          except Exception as ex:
+            self.client.publish(self.basetopic + "/status/power","off")
+        else:
+            self.connecttv(tv)
+    #def checktvstatus(self):
+      
+    
     def mqtt_on_pin_message(self,client, userdata, msg):
         if msg.payload is not None:
             print(rc.app_id)
@@ -161,7 +178,7 @@ if __name__ == '__main__':
     viera.connecttv(tv)
     while True:
         try:
-            viera.mqttloop()
+            viera.mqttloop(tv)
         except:
             _LOGGER.debug("main Loop error")
             pass
