@@ -1,11 +1,13 @@
-import logging
 from dotenv import load_dotenv
+import datetime
+import logging
 import os
 import panasonic_viera            # pip install panasonic_viera, aiohttp
                                   #https://github.com/florianholzapfel/panasonic-viera
 import paho.mqtt.client as paho   # pip install paho-mqtt
 import socket 
 import threading
+import time
 
 load_dotenv()
 version = '0.1'
@@ -44,9 +46,9 @@ class VieraMQTTHandler(threading.Thread):
             # Sleeps to ease load on processor
             time.sleep(.05)
             heartbeat = heartbeat + 1
-            if heartbeat % 10 == 0:
-                _LOGGER.info("Heartbeat: " + str(datetime.datetime.now()))
-            if heartbeat % 1000 == 0:
+            if heartbeat % 100 == 0:
+                _LOGGER.info("debug Heartbeat: ({}) {}".format(heartbeat,str(datetime.datetime.now())))
+            if heartbeat % 500 == 0:
                 _LOGGER.debug("Heartbeat: " + str(datetime.datetime.now()))
                 if not self.client.connected_flag:
                     self.client.reconnect()
@@ -54,6 +56,7 @@ class VieraMQTTHandler(threading.Thread):
 
                 #get tv status
                 self.checktvstatus()
+                heartbeat = 0
     #def run(self):
 
     def connectmqtt(self,mqtt):
@@ -126,10 +129,11 @@ class VieraMQTTHandler(threading.Thread):
     
     def connecttv(self):
         if 'appid' not in tv or len(tv['appid']) == 0:
+            _LOGGER.info("Tv Connect: Need to get PIN code and authorise")
             print("Need to get PIN code and authorise")
             # Get pinn
             self.rc = panasonic_viera.RemoteControl(self.tv['host'])
-            _LOGGER.info("ConnectTV: Seding request to auth tv")
+            _LOGGER.info("TV Connect: Seding request to auth tv")
             self.rc.request_pin_code()
             client.subscribe(self.basetopic + "/pin")
             client.message_callback_add(self.basetopic +"/pin",mqtt_on_pin_message)
@@ -139,27 +143,32 @@ class VieraMQTTHandler(threading.Thread):
             params["app_id"]= self.tv['appid']
             params["encryption_key"]= self.tv['enckey']
 
-            _LOGGER.info("Connecting to tv")
+            _LOGGER.info("TV Connect: Connecting to tv")
             self.rc = panasonic_viera.RemoteControl(host=self.tv['host'],app_id=self.tv['appid'],
                 encryption_key=self.tv['enckey'])
             self.checktvstatus()
     #def connect(self, host=None,app_id=None,encryption=None):
 
     def checktvstatus(self):
-        _LOGGER.info("MQTT Status: Calling TV status")
+        _LOGGER.info("TV Status: Calling TV status")
         if self.rc is not None:
-          ret = self.rc.get_device_info()
-          _LOGGER.info("MQTT Status: {}".format(str(ret)))
-          self.client.publish(self.basetopic + "/status",str(ret))
+            _LOGGER.info("TV Status: Calling device info")
+            ret = self.rc.get_device_info()
+            _LOGGER.info("TV Status: {}".format(str(ret)))
+            self.client.publish(self.basetopic + "/status",str(ret))
           
-          #Checking if TV is on by getting mute status.
-          try:
-            ret = self.rtc.get_mute()
-            self.client.publish(self.basetopic + "/status/power","on")
-            _LOGGER.info("MQTT Status: Mute state {}".format(str(ret)))
-          except Exception as ex:
-            self.client.publish(self.basetopic + "/status/power","off")
+            #Checking if TV is on by getting mute status.
+            try:
+                _LOGGER.info("TV Status: Calling mute command")
+                ret = self.rc.get_mute()
+                self.client.publish(self.basetopic + "/status/power","on")
+                _LOGGER.info("TV Status: Mute state {}".format(str(ret)))
+            except Exception as ex:
+                _LOGGER.info("TV Status: Exception from mute, tv off: " + str(ex))
+                self.client.publish(self.basetopic + "/status/power","off")
+            #try
         else:
+            _LOGGER.info("TV Status: TV not connected")
             self.connecttv()
     #def checktvstatus(self):
       
