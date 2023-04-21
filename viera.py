@@ -57,6 +57,7 @@ class VieraMQTTHandler(threading.Thread):
                 #get tv status
                 self.checktvstatus()
                 heartbeat = 0
+            self.client.loop_start()
     #def run(self):
 
     def connectmqtt(self,mqtt):
