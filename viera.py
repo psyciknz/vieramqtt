@@ -5,6 +5,7 @@ import panasonic_viera            # pip install panasonic_viera, aiohttp
                                   #https://github.com/florianholzapfel/panasonic-viera
 import paho.mqtt.client as paho   # pip install paho-mqtt
 import socket 
+import threading
 
 load_dotenv()
 version = '0.1'
@@ -21,15 +22,39 @@ ch.setFormatter(formatter)
 _LOGGER.addHandler(ch)
 
 
-class VieraMQTTHandler():
+class VieraMQTTHandler(threading.Thread):
 
-    def __init__(self,  mqtt):
+    def __init__(self,  mqtt, tv):
         self.basetopic = mqtt["basetopic"]
         self.client = self.connectmqtt(mqtt)
         self.mqtt = mqtt
         self.keys = {i.name: i.value for i in panasonic_viera.Keys}
         self.rc = None
+        self.tv = tv
+        
+        # initialise self thread
+        threading.Thread.__init__(self)
+        self.stopped = threading.Event() 
     #def __init__(self,  mqtt):
+
+    def run(self):
+        heartbeat = 0
+        """Fetch events"""
+        while not self.stopped.isSet():
+            # Sleeps to ease load on processor
+            time.sleep(.05)
+            heartbeat = heartbeat + 1
+            if heartbeat % 10 == 0:
+                _LOGGER.info("Heartbeat: " + str(datetime.datetime.now()))
+            if heartbeat % 1000 == 0:
+                _LOGGER.debug("Heartbeat: " + str(datetime.datetime.now()))
+                if not self.client.connected_flag:
+                    self.client.reconnect()
+                self.client.publish(self.basetopic +"/$heartbeat",str(datetime.datetime.now()))
+
+                #get tv status
+                self.checktvstatus()
+    #def run(self):
 
     def connectmqtt(self,mqtt):
         
@@ -50,8 +75,8 @@ class VieraMQTTHandler():
         if self.client is not None:
             self.client.loop_start()
 
-    def mqttloop(self,tv):
-        self.checktvstatus(tv)
+    def mqttloop(self):
+        self.checktvstatus()
         self.client.loop_forever()
 
     def mqtt_on_connect(self,client, userdata, flags, rc):
@@ -88,9 +113,7 @@ class VieraMQTTHandler():
             self.rc.send_key(getattr(panasonic_viera.Keys,key))
         elif (key == 'status'):
             _LOGGER.info("MQTT Status: Status message received")
-            ret = self.rc.get_device_info()
-            _LOGGER.info("MQTT Status: {}".format(str(ret)))
-            self.client.publish(self.basetopic + "/status",str(ret))
+            self.checktvstatus()
         elif (key == 'keys'):
             _LOGGER.info("MQTT Keys: %s" %  ','.join(self.keys))
             self.client.publish(self.basetopic + "/status",','.join(self.keys))
@@ -101,11 +124,11 @@ class VieraMQTTHandler():
     #def mqtt_on_message(self,client, userdata, msg):
 
     
-    def connecttv(self, tv):
+    def connecttv(self):
         if 'appid' not in tv or len(tv['appid']) == 0:
             print("Need to get PIN code and authorise")
             # Get pinn
-            self.rc = panasonic_viera.RemoteControl(tv['host'])
+            self.rc = panasonic_viera.RemoteControl(self.tv['host'])
             _LOGGER.info("ConnectTV: Seding request to auth tv")
             self.rc.request_pin_code()
             client.subscribe(self.basetopic + "/pin")
@@ -113,17 +136,16 @@ class VieraMQTTHandler():
             client.publish(self.basetopic + "/status","Post pin to " + self.basetopic + "/pin")
         else:
             params = {}
-            params["app_id"]= tv['appid']
-            params["encryption_key"]= tv['enckey']
+            params["app_id"]= self.tv['appid']
+            params["encryption_key"]= self.tv['enckey']
 
             _LOGGER.info("Connecting to tv")
-            self.rc = panasonic_viera.RemoteControl(host=tv['host'],app_id=tv['appid'],encryption_key=tv['enckey'])
-            ret = self.rc.get_device_info()
-            _LOGGER.info("MQTT Status: {}".format(str(ret)))
-            self.client.publish(self.basetopic + "/status",str(ret))
+            self.rc = panasonic_viera.RemoteControl(host=self.tv['host'],app_id=self.tv['appid'],
+                encryption_key=self.tv['enckey'])
+            self.checktvstatus()
     #def connect(self, host=None,app_id=None,encryption=None):
 
-    def checktvstatus(self,tv):
+    def checktvstatus(self):
         _LOGGER.info("MQTT Status: Calling TV status")
         if self.rc is not None:
           ret = self.rc.get_device_info()
@@ -138,7 +160,7 @@ class VieraMQTTHandler():
           except Exception as ex:
             self.client.publish(self.basetopic + "/status/power","off")
         else:
-            self.connecttv(tv)
+            self.connecttv()
     #def checktvstatus(self):
       
     
@@ -173,15 +195,16 @@ if __name__ == '__main__':
     tv["enckey"] = os.environ.get("TVENCRYPTIONKEY")
 
     
-    viera = VieraMQTTHandler(mqtt)
+    viera = VieraMQTTHandler(mqtt,tv)
     viera.mqttstart()
-    viera.connecttv(tv)
-    while True:
-        try:
-            viera.mqttloop(tv)
-        except:
-            _LOGGER.debug("main Loop error")
-            pass
+    viera.connecttv()
+    viera.start()
+    # while True:
+    #     try:
+    #         viera.mqttloop()
+    #     except:
+    #         _LOGGER.warning("main Loop error")
+    #         pass
     # Make the TV display a pairing pin code
     # We can now start communicating with our TV
     # Send EPG key
