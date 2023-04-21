@@ -1,3 +1,4 @@
+import asyncio
 from dotenv import load_dotenv
 import datetime
 import logging
@@ -24,7 +25,7 @@ ch.setFormatter(formatter)
 _LOGGER.addHandler(ch)
 
 
-class VieraMQTTHandler(threading.Thread):
+class VieraMQTTHandler(threading.Thread, panasonic_viera.RemoteControl):
 
     def __init__(self,  mqtt, tv):
         self.basetopic = mqtt["basetopic"]
@@ -74,6 +75,9 @@ class VieraMQTTHandler(threading.Thread):
         client.will_set(self.basetopic +"/$online",False,qos=0,retain=True)
         return client
     #def connectmqtt(mqtt):
+   
+    def on_event(self, service, properties):
+        _LOGGER.info("TV Event: event service {} properties {}".format(service,properties))
 
     def mqttstart(self):
         if self.client is not None:
@@ -165,8 +169,9 @@ class VieraMQTTHandler(threading.Thread):
                 self.client.publish(self.basetopic + "/status/power","on")
                 _LOGGER.info("TV Status: Mute state {}".format(str(ret)))
             except Exception as ex:
-                _LOGGER.info("TV Status: Exception from mute, tv off: " + str(ex))
                 self.client.publish(self.basetopic + "/status/power","off")
+                _LOGGER.info("TV Status: Exception from mute, tv off: " + str(ex))
+                
             #try
         else:
             _LOGGER.info("TV Status: TV not connected")
