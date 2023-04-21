@@ -25,7 +25,7 @@ ch.setFormatter(formatter)
 _LOGGER.addHandler(ch)
 
 
-class VieraMQTTHandler(threading.Thread, panasonic_viera.RemoteControl):
+class VieraMQTTHandler(threading.Thread):
 
     def __init__(self,  mqtt, tv):
         self.basetopic = mqtt["basetopic"]
@@ -47,18 +47,24 @@ class VieraMQTTHandler(threading.Thread, panasonic_viera.RemoteControl):
             # Sleeps to ease load on processor
             time.sleep(.05)
             heartbeat = heartbeat + 1
-            if heartbeat % 100 == 0:
-                _LOGGER.info("debug Heartbeat: ({}) {}".format(heartbeat,str(datetime.datetime.now())))
-            if heartbeat % 500 == 0:
-                _LOGGER.debug("Heartbeat: " + str(datetime.datetime.now()))
+            #if heartbeat % 5 == 0:
+            #    _LOGGER.info("debug Heartbeat: ({}) {}".format(heartbeat,str(datetime.datetime.now())))
+            _LOGGER.debug("debug Heartbeat: ({}) {}".format(heartbeat,str(datetime.datetime.now())))
+            if heartbeat % 10 == 0:
+                _LOGGER.debug("debug Heartbeat Status: ({}) {}".format(heartbeat,str(datetime.datetime.now())))
                 if not self.client.connected_flag:
                     self.client.reconnect()
                 self.client.publish(self.basetopic +"/$heartbeat",str(datetime.datetime.now()))
 
-                #get tv status
-                self.checktvstatus()
+                # Checks TV status (on/off) and calls MQTT Loop start
+                self.mqttloop()
                 heartbeat = 0
-            self.client.loop_start()
+                #get tv status
+            try:
+                self.client.loop()
+            except Exception as ex:
+                _LOGGER.error("Run: Error in MQTT Start: " + str(ex))
+        #while not self.stopped.isSet():
     #def run(self):
 
     def connectmqtt(self,mqtt):
@@ -80,12 +86,23 @@ class VieraMQTTHandler(threading.Thread, panasonic_viera.RemoteControl):
         _LOGGER.info("TV Event: event service {} properties {}".format(service,properties))
 
     def mqttstart(self):
-        if self.client is not None:
-            self.client.loop_start()
+        try:
+            if self.client is not None:
+                _LOGGER.info("MQTT Start: Starting loop")
+                self.client.loop_start()
+        except Exception as ex:
+            _LOGGER.error("MQTT Start: Error in MQTT Start: " + str(ex))
+    #def mqttstart(self):
 
     def mqttloop(self):
-        self.checktvstatus()
-        self.client.loop_forever()
+        try:
+            _LOGGER.info("MQTT Loop: Checking Status")
+            self.checktvstatus()
+            _LOGGER.debug("MQTT Loop: Starting MQTT loop")
+            self.client.loop_start()
+        except Exception as ex:
+            _LOGGER.error("MQTT Loop: Error in MQTT Loop: " + str(ex))
+    #def mqttloop(self):
 
     def mqtt_on_connect(self,client, userdata, flags, rc):
         if rc==0:
@@ -133,25 +150,30 @@ class VieraMQTTHandler(threading.Thread, panasonic_viera.RemoteControl):
 
     
     def connecttv(self):
-        if 'appid' not in tv or len(tv['appid']) == 0:
-            _LOGGER.info("Tv Connect: Need to get PIN code and authorise")
-            print("Need to get PIN code and authorise")
-            # Get pinn
-            self.rc = panasonic_viera.RemoteControl(self.tv['host'])
-            _LOGGER.info("TV Connect: Seding request to auth tv")
-            self.rc.request_pin_code()
-            client.subscribe(self.basetopic + "/pin")
-            client.message_callback_add(self.basetopic +"/pin",mqtt_on_pin_message)
-            client.publish(self.basetopic + "/status","Post pin to " + self.basetopic + "/pin")
-        else:
-            params = {}
-            params["app_id"]= self.tv['appid']
-            params["encryption_key"]= self.tv['enckey']
+        try:
+            if 'appid' not in tv or len(tv['appid']) == 0:
+                _LOGGER.info("Tv Connect: Need to get PIN code and authorise")
+                print("Need to get PIN code and authorise")
+                # Get pinn
+                self.rc = panasonic_viera.RemoteControl(self.tv['host'])
+                _LOGGER.info("TV Connect: Seding request to auth tv")
+                self.rc.request_pin_code()
+                client.subscribe(self.basetopic + "/pin")
+                client.message_callback_add(self.basetopic +"/pin",mqtt_on_pin_message)
+                client.publish(self.basetopic + "/status","Post pin to " + self.basetopic + "/pin")
+            else:
+                params = {}
+                params["app_id"]= self.tv['appid']
+                params["encryption_key"]= self.tv['enckey']
 
-            _LOGGER.info("TV Connect: Connecting to tv")
-            self.rc = panasonic_viera.RemoteControl(host=self.tv['host'],app_id=self.tv['appid'],
-                encryption_key=self.tv['enckey'])
-            self.checktvstatus()
+                _LOGGER.info("TV Connect: Connecting to tv")
+                self.rc = panasonic_viera.RemoteControl(host=self.tv['host'],app_id=self.tv['appid'],
+                    encryption_key=self.tv['enckey'])
+                _LOGGER.info("TV Connect: Connected, Checking TV Status")
+                self.checktvstatus()
+            #if 'appid' not in tv or len(tv['appid']) == 0:
+        except Exception as ex:
+            _LOGGER.error("TV Connect: Error in TV connection: " + str(ex))
     #def connect(self, host=None,app_id=None,encryption=None):
 
     def checktvstatus(self):
@@ -169,6 +191,7 @@ class VieraMQTTHandler(threading.Thread, panasonic_viera.RemoteControl):
                 self.client.publish(self.basetopic + "/status/power","on")
                 _LOGGER.info("TV Status: Mute state {}".format(str(ret)))
             except Exception as ex:
+                _LOGGER.debug("publish off")
                 self.client.publish(self.basetopic + "/status/power","off")
                 _LOGGER.info("TV Status: Exception from mute, tv off: " + str(ex))
                 
