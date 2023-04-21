@@ -124,7 +124,7 @@ class VieraMQTTHandler():
     #def connect(self, host=None,app_id=None,encryption=None):
 
     def checktvstatus(self,tv):
-        _LOGGER.info("MQTT Status: Calling TV status
+        _LOGGER.info("MQTT Status: Calling TV status")
         if self.rc is not None:
           ret = self.rc.get_device_info()
           _LOGGER.info("MQTT Status: {}".format(str(ret)))
@@ -134,7 +134,7 @@ class VieraMQTTHandler():
           try:
             ret = self.rtc.get_mute()
             self.client.publish(self.basetopic + "/status/power","on")
-             _LOGGER.info("MQTT Status: Mute state {}".format(str(ret)))
+            _LOGGER.info("MQTT Status: Mute state {}".format(str(ret)))
           except Exception as ex:
             self.client.publish(self.basetopic + "/status/power","off")
         else:
