@@ -158,9 +158,9 @@ class VieraMQTTHandler(threading.Thread):
                 self.rc = panasonic_viera.RemoteControl(self.tv['host'])
                 _LOGGER.info("TV Connect: Seding request to auth tv")
                 self.rc.request_pin_code()
-                client.subscribe(self.basetopic + "/pin")
-                client.message_callback_add(self.basetopic +"/pin",mqtt_on_pin_message)
-                client.publish(self.basetopic + "/status","Post pin to " + self.basetopic + "/pin")
+                self.client.subscribe(self.basetopic + "/pin")
+                self.client.message_callback_add(self.basetopic +"/pin",self.mqtt_on_pin_message)
+                self.client.publish(self.basetopic + "/status","Post pin to " + self.basetopic + "/pin")
             else:
                 params = {}
                 params["app_id"]= self.tv['appid']
@@ -235,7 +235,7 @@ if __name__ == '__main__':
     
     viera = VieraMQTTHandler(mqtt,tv)
     viera.mqttstart()
-    viera.connecttv()
+    #viera.connecttv()
     viera.start()
     # while True:
     #     try:
