@@ -6,11 +6,15 @@
     "configurations": [
         {
             "name": "Python: Current File",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "justMyCode": true
+            "justMyCode": true,
+            "env": {
+                "MQTTPORT": "1883",
+                "MQTTBASETOPIC": "viera"
+                }
         }
     ]
 }

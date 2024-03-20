@@ -135,7 +135,10 @@ class VieraMQTTHandler(threading.Thread):
 
         if key in self.keys:
             _LOGGER.info("MQTT Message: Sending {} to device".format(key))
-            self.rc.send_key(getattr(panasonic_viera.Keys,key))
+            try:
+                self.rc.send_key(getattr(panasonic_viera.Keys,key))
+            except Exception as ex:
+                _LOGGER.error(f"Error sending {key} to device")
         elif (key == 'status'):
             _LOGGER.info("MQTT Status: Status message received")
             self.checktvstatus()
@@ -204,10 +207,10 @@ class VieraMQTTHandler(threading.Thread):
     
     def mqtt_on_pin_message(self,client, userdata, msg):
         if msg.payload is not None:
-            print(rc.app_id)
-            print( rc.enc_key)
-            _LOGGER.info("MQTT PIN Message: Received PIN, store in TVAPPID variable  with value: '" + rc.app_id + "' and TVENCRYPTIONLEY with value: '" + rc.enc_key + "'")
-            client.publish(self.basetopic + "/status","Store TVAPPID env variable with value: '" + rc.app_id + "' and TVENCRYPTIONLEY with value: '" + rc.enc_key + "'")
+            print(self.rc.app_id)
+            print(self.rc.enc_key)
+            _LOGGER.info("MQTT PIN Message: Received PIN, store in TVAPPID variable  with value: '" + self.rc.app_id + "' and TVENCRYPTIONLEY with value: '" + self.rc.enc_key + "'")
+            client.publish(self.basetopic + "/status","Store TVAPPID env variable with value: '" + self.rc.app_id + "' and TVENCRYPTIONLEY with value: '" + self.rc.enc_key + "'")
             self.rc.authorize_pin_code(pincode=msg.payload)
     #def mqtt_on_pin_message(self,client, userdata, msg):
 
@@ -235,7 +238,7 @@ if __name__ == '__main__':
     
     viera = VieraMQTTHandler(mqtt,tv)
     viera.mqttstart()
-    #viera.connecttv()
+    viera.connecttv()
     viera.start()
     # while True:
     #     try:
